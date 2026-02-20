@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Inspector Pro</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+      color: #00ff55;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -2;
+      opacity: 0.3;
+    }
+
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: -1;
+    }
+
+    header {
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #00ff55;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(45deg, #00ff55, #00cc44, #00ff00);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 20px rgba(0, 255, 85, 0.5);
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 30px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 1200px) {
+      main {
+        grid-template-columns: 1fr;
+        padding: 20px;
+      }
+    }
+
+    section {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(15px);
+      border: 1px solid #00ff55;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 10px 30px rgba(0, 255, 85, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    section:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0, 255, 85, 0.3);
+    }
+
+    h2 {
+      color: #00ff55;
+      margin-bottom: 20px;
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2::before {
+      content: '⚡';
+      font-size: 1.2rem;
+    }
+
+    button {
+      background: linear-gradient(45deg, #ff0000, #cc0000);
+      color: #00ff55;
+      border: 1px solid #00ff55;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    button:hover {
+      background: linear-gradient(45deg, #00ff55, #00cc44);
+      color: #000;
+      box-shadow: 0 0 20px rgba(0, 255, 85, 0.6);
+      transform: scale(1.05);
+    }
+
+    #network {
+      width: 100%;
+      height: 450px;
+      border: 1px solid #00ff55;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    #log-container {
+      height: 450px;
+      overflow-y: auto;
+      background: #000;
+      color: #00ff55;
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      border: 1px solid #00ff55;
+      border-radius: 8px;
+      line-height: 1.4;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      padding: 5px;
+      border-radius: 4px;
+      background: rgba(0, 255, 85, 0.05);
+      border-left: 3px solid #00ff55;
+    }
+
+    .vuln {
+      color: #ff4444 !important;
+      font-weight: bold;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    #device-list {
+      list-style: none;
+      max-height: 450px;
+      overflow-y: auto;
+    }
+
+    .device {
+      background: rgba(0, 255, 85, 0.1);
+      margin: 10px 0;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 255, 85, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .device:hover {
+      background: rgba(0, 255, 85, 0.2);
+      transform: translateX(5px);
+    }
+
+    .device-ip {
+      font-weight: bold;
+      color: #00ff55;
+      font-size: 1.1rem;
+    }
+
+    #wifi-info {
+      background: rgba(0, 255, 85, 0.1);
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 255, 85, 0.3);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+    }
+
+    footer {
+      background: rgba(0, 0, 0, 0.9);
+      border-top: 1px solid #00ff55;
+      padding: 20px;
+      text-align: center;
+      color: #00ff55;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: #00ff55;
+    }
+
+    .spinner {
+      border: 3px solid rgba(0, 255, 85, 0.3);
+      border-top: 3px solid #00ff55;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-right: 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <video autoplay muted loop>
+    <source src="ca63eccfcf11bcd02c1a900196de630f_720w.mp4" type="video/mp4">
+  </video>
+  <div class="overlay"></div>
+
+  <header>
+    <h1>Network Inspector Pro</h1>
+    <p>Real-time Network Analysis & Security Monitoring</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>🔍 Network Discovery</h2>
+      <button onclick="scanNetwork()">Start Network Scan</button>
+      <ul id="device-list">
+        <li class="loading">
+          <div class="spinner"></div>
+          Ready to scan network...
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>📡 Live Packet Capture</h2>
+      <div id="log-container">
+        <div class="log-entry">Network Inspector initialized. Waiting for packets...</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>🌐 Network Topology</h2>
+      <div id="network"></div>
+    </section>
+
+    <section>
+      <h2>📊 Connection Metrics</h2>
+      <div id="wifi-info">
+        <div class="loading">
+          <div class="spinner"></div>
+          Collecting network metrics...
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 Network Inspector Pro | Powered by Vercel & Real-time Analytics</p>
+  </footer>
+
+  <script>
+    const socket = io();
+    const logContainer = document.getElementById("log-container");
+    const deviceList = document.getElementById("device-list");
+    const wifiInfo = document.getElementById("wifi-info");
+    const networkContainer = document.getElementById("network");
+    let networkInstance = null;
+    let nodes = new vis.DataSet([]);
+    let edges = new vis.DataSet([]);
+
+    // Real-time packet capture
+    socket.on("packet", (packet) => {
+      addLogEntry(`[${new Date().toLocaleTimeString()}] ${packet.src} → ${packet.dst} | ${packet.protocol} | ${packet.size}B | ${packet.service || 'unknown'}`);
+      
+      // Update topology
+      updateTopology(packet);
+    });
+
+    socket.on("device", (device) => {
+      addDevice(device);
+    });
+
+    socket.on("scan_complete", (results) => {
+      deviceList.innerHTML = '';
+      results.forEach(addDevice);
+    });
+
+    socket.on("metrics", (metrics) => {
+      updateMetrics(metrics);
+    });
+
+    function addLogEntry(message) {
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+      entry.textContent = message;
+      if (message.includes("vuln") || message.includes("alert")) {
+        entry.classList.add("vuln");
+      }
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function addDevice(device) {
+      const li = document.createElement("li");
+      li.className = "device";
+      li.innerHTML = `
+        <div class="device-ip">${device.ip}</div>
+        <div>MAC: ${device.mac}</div>
+        <div>Vendor: ${device.vendor}</div>
+        <div>Ports: ${device.open_ports?.join(', ') || 'None'}</div>
+        <div>Services: ${device.services?.join(', ') || 'Unknown'}</div>
+        ${device.vulnerabilities?.length ? `<div class="vuln">⚠️ Vulnerabilities: ${device.vulnerabilities.join(', ')}</div>` : ''}
+      `;
+      deviceList.appendChild(li);
+
+      // Add to topology
+      const nodeId = device.ip.replace(/\./g, '_');
+      nodes.add({ id: nodeId, label: device.ip, title: `${device.vendor}\n${device.services?.join(', ')}`, color: device.vulnerabilities?.length ? '#ff4444' : '#00ff55' });
+    }
+
+    function updateTopology(packet) {
+      const srcId = packet.src.replace(/\./g, '_');
+      const dstId = packet.dst.replace(/\./g, '_');
+      
+      if (!nodes.get(srcId)) {
+        nodes.add({ id: srcId, label: packet.src, color: '#00ff55' });
+      }
+      if (!nodes.get(dstId)) {
+        nodes.add({ id: dstId, label: packet.dst, color: '#ffaa00' });
+      }
+      
+      const edgeId = `${srcId}-${dstId}`;
+      edges.add({ id: edgeId, from: srcId, to: dstId, label: packet.protocol });
+    }
+
+    function updateMetrics(metrics) {
+      wifiInfo.innerHTML = `
+        <div class="info-row"><span>Local IP:</span><span>${metrics.local_ip}</span></div>
+        <div class="info-row"><span>Gateway:</span><span>${metrics.gateway}</span></div>
+        <div class="info-row"><span>Network:</span><span>${metrics.network}</span></div>
+        <div class="info-row"><span>Interface:</span><span>${metrics.interface}</span></div>
+        <div class="info-row"><span>Uptime:</span><span>${metrics.uptime}</span></div>
+        <div class="info-row"><span>Active Connections:</span><span>${metrics.connections}</span></div>
+      `;
+    }
+
+    async function scanNetwork() {
+      deviceList.innerHTML = '<li class="loading"><div class="spinner"></div>Scanning network...</li>';
+      socket.emit('scan_network');
+    }
+
+    // Initialize network visualization
+    function initNetwork() {
+      const data = { nodes, edges };
+      const options = {
+        nodes: {
+          shape: "dot",
+          size: 20,
+          font: { size: 12, color: "#ffffff" }
+        },
+        edges: {
+          arrows: 'to',
+          width: 2,
+          color: { color: "#00ff55", highlight: "#ffffff" }
+        },
+        physics: {
+          enabled: true,
+          stabilization: { iterations: 100 }
+        },
+        interaction: {
+          hover: true,
+          zoomView: true
+        }
+      };
+      networkInstance = new vis.Network(networkContainer, data, options);
+    }
+
+    // Initialize on load
+    window.addEventListener('load', () => {
+      initNetwork();
+      socket.emit('get_metrics');
+      addLogEntry('Network Inspector Pro initialized successfully');
+      addLogEntry('Real-time monitoring active...');
+    });
+  </script>
+</body>
+</html>
