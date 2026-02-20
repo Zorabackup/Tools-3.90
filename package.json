@@ -1,21 +1,9 @@
 {
-  "name": "network-inspector-pro",
-  "version": "2.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "node api/index.js",
-    "start": "node api/index.js",
-    "vercel-dev": "vercel dev"
-  },
-   {
-  
+  "name": "network-inspector",
+  "version": "1.0.0",
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.5",
+    "socket.io": "^4.5.4",
     "cors": "^2.8.5"
-  }
-}
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
